@@ -508,6 +508,12 @@ Specifies whether user authentication based on GSSAPI is allowed.
 The default is
 .Dq no .
 Note that this option applies to protocol version 2 only.
+.It Cm GSSAPIKeyExchange
+Specifies whether key exchange based on GSSAPI may be used. When using
+GSSAPI key exchange the server need not have a host key.
+The default is
+.Dq no .
+Note that this option applies to protocol version 2 only.
 .It Cm GSSAPIDelegateCredentials
 Forward (delegate) credentials to the server.
 The default is

@@ -1594,10 +1594,13 @@ main(int ac, char **av)
 		logit("Disabling protocol version 1. Could not load host key");
 		options.protocol &= ~SSH_PROTO_1;
 	}
+#ifndef GSSAPI
+	/* The GSSAPI key exchange can run without a host key */
 	if ((options.protocol & SSH_PROTO_2) && !sensitive_data.have_ssh2_key) {
 		logit("Disabling protocol version 2. Could not load host key");
 		options.protocol &= ~SSH_PROTO_2;
 	}
+#endif
 	if (!(options.protocol & (SSH_PROTO_1|SSH_PROTO_2))) {
 		logit("sshd: no hostkeys available -- exiting.");
 		exit(1);
@@ -2361,6 +2364,48 @@ do_ssh2_kex(void)
 
 	myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] = list_hostkey_types();
 
+#ifdef GSSAPI
+	{
+	char *orig;
+	char *gss = NULL;
+	char *newstr = NULL;
+	orig = myproposal[PROPOSAL_KEX_ALGS];
+
+	/* 
+	 * If we don't have a host key, then there's no point advertising
+	 * the other key exchange algorithms
+	 */
+
+	if (strlen(myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS]) == 0)
+		orig = NULL;
+
+	if (options.gss_keyex)
+		gss = ssh_gssapi_server_mechanisms();
+	else
+		gss = NULL;
+
+	if (gss && orig)
+		xasprintf(&newstr, "%s,%s", gss, orig);
+	else if (gss)
+		newstr = gss;
+	else if (orig)
+		newstr = orig;
+
+	/* 
+	 * If we've got GSSAPI mechanisms, then we've got the 'null' host
+	 * key alg, but we can't tell people about it unless its the only
+  	 * host key algorithm we support
+	 */
+	if (gss && (strlen(myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS])) == 0)
+		myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] = "null";
+
+	if (newstr)
+		myproposal[PROPOSAL_KEX_ALGS] = newstr;
+	else
+		fatal("No supported key exchange algorithms");
+	}
+#endif
+
 	/* start key exchange */
 	kex = kex_setup(myproposal);
 	kex->kex[KEX_DH_GRP1_SHA1] = kexdh_server;
@@ -2368,6 +2413,13 @@ do_ssh2_kex(void)
 	kex->kex[KEX_DH_GEX_SHA1] = kexgex_server;
 	kex->kex[KEX_DH_GEX_SHA256] = kexgex_server;
 	kex->kex[KEX_ECDH_SHA2] = kexecdh_server;
+#ifdef GSSAPI
+	if (options.gss_keyex) {
+		kex->kex[KEX_GSS_GRP1_SHA1] = kexgss_server;
+		kex->kex[KEX_GSS_GRP14_SHA1] = kexgss_server;
+		kex->kex[KEX_GSS_GEX_SHA1] = kexgss_server;
+	}
+#endif
 	kex->server = 1;
 	kex->client_version_string=client_version_string;
 	kex->server_version_string=server_version_string;
