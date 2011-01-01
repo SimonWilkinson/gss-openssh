@@ -42,6 +42,9 @@
 #include "dh.h"
 #include "ssh-gss.h"
 #include "monitor_wrap.h"
+#include "servconf.h"
+
+extern ServerOptions options;
 
 void
 kexgss_server(Kex *kex)
@@ -276,5 +279,10 @@ kexgss_server(Kex *kex)
 	kex_derive_keys(kex, hash, hashlen, shared_secret);
 	BN_clear_free(shared_secret);
 	kex_finish(kex);
+
+	/* If this was a rekey, then save out any delegated credentials we
+	 * just exchanged.  */
+	if (options.gss_store_rekey)
+		ssh_gssapi_rekey_creds();
 }
 #endif /* GSSAPI */

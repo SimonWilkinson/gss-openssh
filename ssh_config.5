@@ -523,6 +523,14 @@ Forward (delegate) credentials to the server.
 The default is
 .Dq no .
 Note that this option applies to protocol version 2 connections using GSSAPI.
+.It Cm GSSAPIRenewalForcesRekey
+If set to 
+.Dq yes
+then renewal of the client's GSSAPI credentials will force the rekeying of the
+ssh connection. With a compatible server, this can delegate the renewed 
+credentials to a session on the server.
+The default is
+.Dq no .
 .It Cm GSSAPITrustDns
 Set to 
 .Dq yes to indicate that the DNS is trusted to securely canonicalize
