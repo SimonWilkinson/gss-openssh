@@ -173,6 +173,7 @@ int mm_answer_gss_accept_ctx(int, Buffer *);
 int mm_answer_gss_userok(int, Buffer *);
 int mm_answer_gss_checkmic(int, Buffer *);
 int mm_answer_gss_sign(int, Buffer *);
+int mm_answer_gss_updatecreds(int, Buffer *);
 #endif
 
 #ifdef SSH_AUDIT_EVENTS
@@ -259,6 +260,7 @@ struct mon_table mon_dispatch_postauth20[] = {
     {MONITOR_REQ_GSSSETUP, 0, mm_answer_gss_setup_ctx},
     {MONITOR_REQ_GSSSTEP, 0, mm_answer_gss_accept_ctx},
     {MONITOR_REQ_GSSSIGN, 0, mm_answer_gss_sign},
+    {MONITOR_REQ_GSSUPCREDS, 0, mm_answer_gss_updatecreds},
 #endif
     {MONITOR_REQ_MODULI, 0, mm_answer_moduli},
     {MONITOR_REQ_SIGN, 0, mm_answer_sign},
@@ -2013,7 +2015,8 @@ mm_answer_gss_userok(int sock, Buffer *m)
 	if (!options.gss_authentication && !options.gss_keyex)
 		fatal("In GSSAPI monitor when GSSAPI is disabled");
 
-	authenticated = authctxt->valid && ssh_gssapi_userok(authctxt->user);
+	authenticated = authctxt->valid && 
+	    ssh_gssapi_userok(authctxt->user, authctxt->pw);
 
 	buffer_clear(m);
 	buffer_put_int(m, authenticated);
@@ -2064,8 +2067,34 @@ mm_answer_gss_sign(int socket, Buffer *m)
 
 	/* Turn on getpwnam permissions */
 	monitor_permit(mon_dispatch, MONITOR_REQ_PWNAM, 1);
+	
+	/* And credential updating, for when rekeying */
+	monitor_permit(mon_dispatch, MONITOR_REQ_GSSUPCREDS, 1);
 
 	return (0);
+}
+
+int
+mm_answer_gss_updatecreds(int socket, Buffer *m) {
+	ssh_gssapi_ccache store;
+	int ok;
+
+	store.filename = buffer_get_string(m, NULL);
+	store.envvar   = buffer_get_string(m, NULL);
+	store.envval   = buffer_get_string(m, NULL);
+
+	ok = ssh_gssapi_update_creds(&store);
+
+	xfree(store.filename);
+	xfree(store.envvar);
+	xfree(store.envval);
+
+	buffer_clear(m);
+	buffer_put_int(m, ok);
+
+	mm_request_send(socket, MONITOR_ANS_GSSUPCREDS, m);
+
+	return(0);
 }
 
 #endif /* GSSAPI */
