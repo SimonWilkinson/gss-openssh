@@ -1,7 +1,7 @@
 /* $OpenBSD: gss-serv.c,v 1.22 2008/05/08 12:02:23 djm Exp $ */
 
 /*
- * Copyright (c) 2001-2003 Simon Wilkinson. All rights reserved.
+ * Copyright (c) 2001-2009 Simon Wilkinson. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -48,6 +48,7 @@
 #include "servconf.h"
 
 #include "ssh-gss.h"
+#include "monitor_wrap.h"
 
 extern ServerOptions options;
 
@@ -124,6 +125,28 @@ ssh_gssapi_server_ctx(Gssctxt **ctx, gss_OID oid)
 }
 
 /* Unprivileged */
+char *
+ssh_gssapi_server_mechanisms() {
+	gss_OID_set	supported;
+
+	ssh_gssapi_supported_oids(&supported);
+	return (ssh_gssapi_kex_mechs(supported, &ssh_gssapi_server_check_mech,
+	    NULL));
+}
+
+/* Unprivileged */
+int
+ssh_gssapi_server_check_mech(Gssctxt **dum, gss_OID oid, const char *data) {
+	Gssctxt *ctx = NULL;
+	int res;
+ 
+	res = !GSS_ERROR(PRIVSEP(ssh_gssapi_server_ctx(&ctx, oid)));
+	ssh_gssapi_delete_ctx(&ctx);
+
+	return (res);
+}
+
+/* Unprivileged */
 void
 ssh_gssapi_supported_oids(gss_OID_set *oidset)
 {
@@ -133,7 +156,9 @@ ssh_gssapi_supported_oids(gss_OID_set *oidset)
 	gss_OID_set supported;
 
 	gss_create_empty_oid_set(&min_status, oidset);
-	gss_indicate_mechs(&min_status, &supported);
+
+	if (GSS_ERROR(gss_indicate_mechs(&min_status, &supported)))
+		return;
 
 	while (supported_mechs[i]->name != NULL) {
 		if (GSS_ERROR(gss_test_oid_set_member(&min_status,
@@ -360,16 +385,6 @@ ssh_gssapi_userok(char *user)
 	else
 		debug("ssh_gssapi_userok: Unknown GSSAPI mechanism");
 	return (0);
-}
-
-/* Privileged */
-OM_uint32
-ssh_gssapi_checkmic(Gssctxt *ctx, gss_buffer_t gssbuf, gss_buffer_t gssmic)
-{
-	ctx->major = gss_verify_mic(&ctx->minor, ctx->context,
-	    gssbuf, gssmic, NULL);
-
-	return (ctx->major);
 }
 
 #endif
