@@ -128,6 +128,7 @@ typedef enum {
 	oEnableSSHKeysign, oRekeyLimit, oVerifyHostKeyDNS, oConnectTimeout,
 	oAddressFamily, oGssAuthentication, oGssDelegateCreds,
 	oGssTrustDns, oGssKeyEx, oGssClientIdentity, oGssRenewalRekey,
+	oGssServerIdentity, 
 	oServerAliveInterval, oServerAliveCountMax, oIdentitiesOnly,
 	oSendEnv, oControlPath, oControlMaster, oControlPersist,
 	oHashKnownHosts,
@@ -171,6 +172,7 @@ static struct {
 	{ "gssapidelegatecredentials", oGssDelegateCreds },
 	{ "gssapitrustdns", oGssTrustDns },
 	{ "gssapiclientidentity", oGssClientIdentity },
+	{ "gssapiserveridentity", oGssServerIdentity },
 	{ "gssapirenewalforcesrekey", oGssRenewalRekey },
 #else
 	{ "gssapiauthentication", oUnsupported },
@@ -497,6 +499,10 @@ parse_flag:
 
 	case oGssClientIdentity:
 		charptr = &options->gss_client_identity;
+		goto parse_string;
+
+	case oGssServerIdentity:
+		charptr = &options->gss_server_identity;
 		goto parse_string;
 
 	case oGssRenewalRekey:
@@ -1088,6 +1094,7 @@ initialize_options(Options * options)
 	options->gss_trust_dns = -1;
 	options->gss_renewal_rekey = -1;
 	options->gss_client_identity = NULL;
+	options->gss_server_identity = NULL;
 	options->password_authentication = -1;
 	options->kbd_interactive_authentication = -1;
 	options->kbd_interactive_devices = NULL;
