@@ -625,6 +625,12 @@ userauth_gssapi(Authctxt *authctxt)
 	static u_int mech = 0;
 	OM_uint32 min;
 	int ok = 0;
+	const char *gss_host;
+
+	if (options.gss_trust_dns)
+		gss_host = get_canonical_hostname(1);
+	else
+		gss_host = authctxt->host;
 
 	/* Try one GSSAPI method at a time, rather than sending them all at
 	 * once. */
@@ -637,7 +643,7 @@ userauth_gssapi(Authctxt *authctxt)
 		/* My DER encoding requires length<128 */
 		if (gss_supported->elements[mech].length < 128 &&
 		    ssh_gssapi_check_mechanism(&gssctxt, 
-		    &gss_supported->elements[mech], authctxt->host)) {
+		    &gss_supported->elements[mech], gss_host)) {
 			ok = 1; /* Mechanism works */
 		} else {
 			mech++;
