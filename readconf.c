@@ -129,7 +129,7 @@ typedef enum {
 	oClearAllForwardings, oNoHostAuthenticationForLocalhost,
 	oEnableSSHKeysign, oRekeyLimit, oVerifyHostKeyDNS, oConnectTimeout,
 	oAddressFamily, oGssAuthentication, oGssDelegateCreds,
-	oGssTrustDns, oGssKeyEx, oGssClientIdentity,
+	oGssTrustDns, oGssKeyEx, oGssClientIdentity, oGssRenewalRekey,
 	oServerAliveInterval, oServerAliveCountMax, oIdentitiesOnly,
 	oSendEnv, oControlPath, oControlMaster, oControlPersist,
 	oHashKnownHosts,
@@ -174,12 +174,14 @@ static struct {
 	{ "gssapidelegatecredentials", oGssDelegateCreds },
 	{ "gssapitrustdns", oGssTrustDns },
 	{ "gssapiclientidentity", oGssClientIdentity },
+	{ "gssapirenewalforcesrekey", oGssRenewalRekey },
 #else
 	{ "gssapiauthentication", oUnsupported },
 	{ "gssapikeyexchange", oUnsupported },
 	{ "gssapidelegatecredentials", oUnsupported },
 	{ "gssapitrustdns", oUnsupported },
 	{ "gssapiclientidentity", oUnsupported },
+	{ "gssapirenewalforcesrekey", oUnsupported },
 #endif
 	{ "fallbacktorsh", oDeprecated },
 	{ "usersh", oDeprecated },
@@ -501,6 +503,10 @@ parse_flag:
 	case oGssClientIdentity:
 		charptr = &options->gss_client_identity;
 		goto parse_string;
+
+	case oGssRenewalRekey:
+		intptr = &options->gss_renewal_rekey;
+		goto parse_flag;
 
 	case oBatchMode:
 		intptr = &options->batch_mode;
@@ -1114,6 +1120,7 @@ initialize_options(Options * options)
 	options->gss_keyex = -1;
 	options->gss_deleg_creds = -1;
 	options->gss_trust_dns = -1;
+	options->gss_renewal_rekey = -1;
 	options->gss_client_identity = NULL;
 	options->password_authentication = -1;
 	options->kbd_interactive_authentication = -1;
@@ -1221,6 +1228,8 @@ fill_default_options(Options * options)
 		options->gss_deleg_creds = 0;
 	if (options->gss_trust_dns == -1)
 		options->gss_trust_dns = 0;
+	if (options->gss_renewal_rekey == -1)
+		options->gss_renewal_rekey = 0;
 	if (options->password_authentication == -1)
 		options->password_authentication = 1;
 	if (options->kbd_interactive_authentication == -1)

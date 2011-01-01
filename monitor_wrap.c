@@ -1232,7 +1232,7 @@ mm_ssh_gssapi_checkmic(Gssctxt *ctx, gss_buffer_t gssbuf, gss_buffer_t gssmic)
 }
 
 int
-mm_ssh_gssapi_userok(char *user)
+mm_ssh_gssapi_userok(char *user, struct passwd *pw)
 {
 	Buffer m;
 	int authenticated = 0;
@@ -1270,6 +1270,28 @@ mm_ssh_gssapi_sign(Gssctxt *ctx, gss_buffer_desc *data, gss_buffer_desc *hash)
 	buffer_free(&m);
 
 	return(major);
+}
+
+int
+mm_ssh_gssapi_update_creds(ssh_gssapi_ccache *store)
+{
+	Buffer m;
+	int ok;
+
+	buffer_init(&m);
+
+	buffer_put_cstring(&m, store->filename ? store->filename : "");
+	buffer_put_cstring(&m, store->envvar ? store->envvar : "");
+	buffer_put_cstring(&m, store->envval ? store->envval : "");
+	
+	mm_request_send(pmonitor->m_recvfd, MONITOR_REQ_GSSUPCREDS, &m);
+	mm_request_receive_expect(pmonitor->m_recvfd, MONITOR_ANS_GSSUPCREDS, &m);
+
+	ok = buffer_get_int(&m);
+
+	buffer_free(&m);
+	
+	return (ok);
 }
 
 #endif /* GSSAPI */

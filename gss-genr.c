@@ -489,4 +489,61 @@ ssh_gssapi_check_mechanism(Gssctxt **ctx, gss_OID oid, const char *host,
 	return (!GSS_ERROR(major));
 }
 
+int
+ssh_gssapi_credentials_updated(Gssctxt *ctxt) {
+	static gss_name_t saved_name = GSS_C_NO_NAME;
+	static OM_uint32 saved_lifetime = 0;
+	static gss_OID saved_mech = GSS_C_NO_OID;
+	static gss_name_t name;
+	static OM_uint32 last_call = 0;
+	OM_uint32 lifetime, now, major, minor;
+	int equal;
+	gss_cred_usage_t usage = GSS_C_INITIATE;
+	
+	now = time(NULL);
+
+	if (ctxt) {
+		debug("Rekey has happened - updating saved versions");
+
+		if (saved_name != GSS_C_NO_NAME)
+			gss_release_name(&minor, &saved_name);
+
+		major = gss_inquire_cred(&minor, GSS_C_NO_CREDENTIAL,
+		    &saved_name, &saved_lifetime, NULL, NULL);
+
+		if (!GSS_ERROR(major)) {
+			saved_mech = ctxt->oid;
+		        saved_lifetime+= now;
+		} else {
+			/* Handle the error */
+		}
+		return 0;
+	}
+
+	if (now - last_call < 10)
+		return 0;
+
+	last_call = now;
+
+	if (saved_mech == GSS_C_NO_OID)
+		return 0;
+	
+	major = gss_inquire_cred(&minor, GSS_C_NO_CREDENTIAL, 
+	    &name, &lifetime, NULL, NULL);
+	if (major == GSS_S_CREDENTIALS_EXPIRED)
+		return 0;
+	else if (GSS_ERROR(major))
+		return 0;
+
+	major = gss_compare_name(&minor, saved_name, name, &equal);
+	gss_release_name(&minor, &name);
+	if (GSS_ERROR(major))
+		return 0;
+
+	if (equal && (saved_lifetime < lifetime + now - 10))
+		return 1;
+
+	return 0;
+}
+
 #endif /* GSSAPI */
