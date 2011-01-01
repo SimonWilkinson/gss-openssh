@@ -74,7 +74,11 @@ kexgss_client(Kex *kex) {
 
 	if (ssh_gssapi_import_name(ctxt, kex->gss_host))
 		fatal("Couldn't import hostname");
-	
+
+	if (kex->gss_client && 
+	    ssh_gssapi_client_identity(ctxt, kex->gss_client))
+		fatal("Couldn't acquire client credentials");
+
 	switch (kex->kex_type) {
 	case KEX_GSS_GRP1_SHA1:
 		dh = dh_new_group1();

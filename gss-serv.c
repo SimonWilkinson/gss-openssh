@@ -131,12 +131,13 @@ ssh_gssapi_server_mechanisms() {
 
 	ssh_gssapi_supported_oids(&supported);
 	return (ssh_gssapi_kex_mechs(supported, &ssh_gssapi_server_check_mech,
-	    NULL));
+	    NULL, NULL));
 }
 
 /* Unprivileged */
 int
-ssh_gssapi_server_check_mech(Gssctxt **dum, gss_OID oid, const char *data) {
+ssh_gssapi_server_check_mech(Gssctxt **dum, gss_OID oid, const char *data,
+    const char *dummy) {
 	Gssctxt *ctx = NULL;
 	int res;
  
