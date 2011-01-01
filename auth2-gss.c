@@ -102,6 +102,7 @@ userauth_gssapi(Authctxt *authctxt)
 
 	if (!present) {
 		xfree(doid);
+		authctxt->server_caused_failure = 1;
 		return (0);
 	}
 
@@ -109,6 +110,7 @@ userauth_gssapi(Authctxt *authctxt)
 		if (ctxt != NULL)
 			ssh_gssapi_delete_ctx(&ctxt);
 		xfree(doid);
+		authctxt->server_caused_failure = 1;
 		return (0);
 	}
 
