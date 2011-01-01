@@ -127,7 +127,7 @@ typedef enum {
 	oClearAllForwardings, oNoHostAuthenticationForLocalhost,
 	oEnableSSHKeysign, oRekeyLimit, oVerifyHostKeyDNS, oConnectTimeout,
 	oAddressFamily, oGssAuthentication, oGssDelegateCreds,
-	oGssTrustDns, oGssKeyEx,
+	oGssTrustDns, oGssKeyEx, oGssClientIdentity,
 	oServerAliveInterval, oServerAliveCountMax, oIdentitiesOnly,
 	oSendEnv, oControlPath, oControlMaster, oControlPersist,
 	oHashKnownHosts,
@@ -170,11 +170,13 @@ static struct {
 	{ "gssapikeyexchange", oGssKeyEx },
 	{ "gssapidelegatecredentials", oGssDelegateCreds },
 	{ "gssapitrustdns", oGssTrustDns },
+	{ "gssapiclientidentity", oGssClientIdentity },
 #else
 	{ "gssapiauthentication", oUnsupported },
 	{ "gssapikeyexchange", oUnsupported },
 	{ "gssapidelegatecredentials", oUnsupported },
 	{ "gssapitrustdns", oUnsupported },
+	{ "gssapiclientidentity", oUnsupported },
 #endif
 	{ "fallbacktorsh", oDeprecated },
 	{ "usersh", oDeprecated },
@@ -490,6 +492,10 @@ parse_flag:
 	case oGssTrustDns:
 		intptr = &options->gss_trust_dns;
 		goto parse_flag;
+
+	case oGssClientIdentity:
+		charptr = &options->gss_client_identity;
+		goto parse_string;
 
 	case oBatchMode:
 		intptr = &options->batch_mode;
@@ -1074,6 +1080,7 @@ initialize_options(Options * options)
 	options->gss_keyex = -1;
 	options->gss_deleg_creds = -1;
 	options->gss_trust_dns = -1;
+	options->gss_client_identity = NULL;
 	options->password_authentication = -1;
 	options->kbd_interactive_authentication = -1;
 	options->kbd_interactive_devices = NULL;

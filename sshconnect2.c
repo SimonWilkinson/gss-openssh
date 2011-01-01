@@ -125,7 +125,7 @@ ssh_kex2(char *host, struct sockaddr *hostaddr)
 		else
 			gss_host = host;
 
-		gss = ssh_gssapi_client_mechanisms(gss_host);
+		gss = ssh_gssapi_client_mechanisms(gss_host, options.gss_client_identity);
 		if (gss) {
 			debug("Offering GSSAPI proposal: %s", gss);
 			xasprintf(&myproposal[PROPOSAL_KEX_ALGS],
@@ -196,6 +196,7 @@ ssh_kex2(char *host, struct sockaddr *hostaddr)
 	if (options.gss_keyex) {
 		kex->gss_deleg_creds = options.gss_deleg_creds;
 		kex->gss_trust_dns = options.gss_trust_dns;
+		kex->gss_client = options.gss_client_identity;
 		kex->gss_host = gss_host;
 	}
 #endif
@@ -642,7 +643,8 @@ userauth_gssapi(Authctxt *authctxt)
 		/* My DER encoding requires length<128 */
 		if (gss_supported->elements[mech].length < 128 &&
 		    ssh_gssapi_check_mechanism(&gssctxt, 
-		    &gss_supported->elements[mech], gss_host)) {
+		    &gss_supported->elements[mech], gss_host, 
+                    options.gss_client_identity)) {
 			ok = 1; /* Mechanism works */
 		} else {
 			mech++;

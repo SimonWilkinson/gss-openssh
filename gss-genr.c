@@ -76,7 +76,7 @@ ssh_gssapi_oid_table_ok() {
  */
 
 char *
-ssh_gssapi_client_mechanisms(const char *host) {
+ssh_gssapi_client_mechanisms(const char *host, const char *client) {
 	gss_OID_set gss_supported;
 	OM_uint32 min_status;
 
@@ -84,12 +84,12 @@ ssh_gssapi_client_mechanisms(const char *host) {
 		return NULL;
 
 	return(ssh_gssapi_kex_mechs(gss_supported, ssh_gssapi_check_mechanism,
-	    host));
+	    host, client));
 }
 
 char *
 ssh_gssapi_kex_mechs(gss_OID_set gss_supported, ssh_gssapi_check_fn *check,
-    const char *data) {
+    const char *host, const char *client) {
 	Buffer buf;
 	size_t i;
 	int oidpos, enclen;
@@ -113,7 +113,7 @@ ssh_gssapi_kex_mechs(gss_OID_set gss_supported, ssh_gssapi_check_fn *check,
 	oidpos = 0;
 	for (i = 0; i < gss_supported->count; i++) {
 		if (gss_supported->elements[i].length < 128 &&
-		    (*check)(NULL, &(gss_supported->elements[i]), data)) {
+		    (*check)(NULL, &(gss_supported->elements[i]), host, client)) {
 
 			deroid[0] = SSH_GSS_OIDTYPE;
 			deroid[1] = gss_supported->elements[i].length;
@@ -352,7 +352,7 @@ ssh_gssapi_init_ctx(Gssctxt *ctx, int deleg_creds, gss_buffer_desc *recv_tok,
 	}
 
 	ctx->major = gss_init_sec_context(&ctx->minor,
-	    GSS_C_NO_CREDENTIAL, &ctx->context, ctx->name, ctx->oid,
+	    ctx->client_creds, &ctx->context, ctx->name, ctx->oid,
 	    GSS_C_MUTUAL_FLAG | GSS_C_INTEG_FLAG | deleg_flag,
 	    0, NULL, recv_tok, NULL, send_tok, flags, NULL);
 
@@ -379,6 +379,37 @@ ssh_gssapi_import_name(Gssctxt *ctx, const char *host)
 
 	xfree(gssbuf.value);
 	return (ctx->major);
+}
+
+OM_uint32
+ssh_gssapi_client_identity(Gssctxt *ctx, const char *name)
+{
+	gss_buffer_desc gssbuf;
+	gss_name_t gssname;
+	OM_uint32 status;
+	gss_OID_set oidset;
+
+	gssbuf.value = (void *) name;
+	gssbuf.length = strlen(gssbuf.value);
+
+	gss_create_empty_oid_set(&status, &oidset);
+	gss_add_oid_set_member(&status, ctx->oid, &oidset);
+
+	ctx->major = gss_import_name(&ctx->minor, &gssbuf,
+	    GSS_C_NT_USER_NAME, &gssname);
+
+	if (!ctx->major)
+		ctx->major = gss_acquire_cred(&ctx->minor, 
+		    gssname, 0, oidset, GSS_C_INITIATE, 
+		    &ctx->client_creds, NULL, NULL);
+
+	gss_release_name(&status, &gssname);
+	gss_release_oid_set(&status, &oidset);
+
+	if (ctx->major)
+		ssh_gssapi_error(ctx);
+
+	return(ctx->major);
 }
 
 OM_uint32
@@ -420,7 +451,8 @@ ssh_gssapi_buildmic(Buffer *b, const char *user, const char *service,
 }
 
 int
-ssh_gssapi_check_mechanism(Gssctxt **ctx, gss_OID oid, const char *host)
+ssh_gssapi_check_mechanism(Gssctxt **ctx, gss_OID oid, const char *host, 
+    const char *client)
 {
 	gss_buffer_desc token = GSS_C_EMPTY_BUFFER;
 	OM_uint32 major, minor;
@@ -438,6 +470,10 @@ ssh_gssapi_check_mechanism(Gssctxt **ctx, gss_OID oid, const char *host)
 	ssh_gssapi_build_ctx(ctx);
 	ssh_gssapi_set_oid(*ctx, oid);
 	major = ssh_gssapi_import_name(*ctx, host);
+
+	if (!GSS_ERROR(major) && client)
+		major = ssh_gssapi_client_identity(*ctx, client);
+
 	if (!GSS_ERROR(major)) {
 		major = ssh_gssapi_init_ctx(*ctx, 0, GSS_C_NO_BUFFER, &token, 
 		    NULL);

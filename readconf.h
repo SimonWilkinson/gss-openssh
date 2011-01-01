@@ -49,6 +49,7 @@ typedef struct {
 	int     gss_keyex;		/* Try GSS key exchange */
 	int     gss_deleg_creds;	/* Delegate GSS credentials */
 	int	gss_trust_dns;		/* Trust DNS for GSS canonicalization */
+	char    *gss_client_identity;   /* Principal to initiate GSSAPI with */
 	int     password_authentication;	/* Try password
 						 * authentication. */
 	int     kbd_interactive_authentication; /* Try keyboard-interactive auth. */

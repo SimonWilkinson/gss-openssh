@@ -515,6 +515,10 @@ GSSAPI key exchange the server need not have a host key.
 The default is
 .Dq no .
 Note that this option applies to protocol version 2 only.
+.It Cm GSSAPIClientIdentity
+If set, specifies the GSSAPI client identity that ssh should use when 
+connecting to the server. The default is unset, which means that the default 
+identity will be used.
 .It Cm GSSAPIDelegateCredentials
 Forward (delegate) credentials to the server.
 The default is

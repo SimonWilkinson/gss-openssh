@@ -1,6 +1,6 @@
 /* $OpenBSD: ssh-gss.h,v 1.10 2007/06/12 08:20:00 djm Exp $ */
 /*
- * Copyright (c) 2001-2003 Simon Wilkinson. All rights reserved.
+ * Copyright (c) 2001-2009 Simon Wilkinson. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -104,7 +104,7 @@ typedef struct {
 	gss_OID		oid; /* client */
 	gss_cred_id_t	creds; /* server */
 	gss_name_t	client; /* server */
-	gss_cred_id_t	client_creds; /* server */
+	gss_cred_id_t	client_creds; /* both */
 } Gssctxt;
 
 extern ssh_gssapi_mech *supported_mechs[];
@@ -128,14 +128,18 @@ void ssh_gssapi_build_ctx(Gssctxt **);
 void ssh_gssapi_delete_ctx(Gssctxt **);
 OM_uint32 ssh_gssapi_sign(Gssctxt *, gss_buffer_t, gss_buffer_t);
 void ssh_gssapi_buildmic(Buffer *, const char *, const char *, const char *);
-int ssh_gssapi_check_mechanism(Gssctxt **, gss_OID, const char *);
+int ssh_gssapi_check_mechanism(Gssctxt **, gss_OID, const char *, const char *);
+OM_uint32 ssh_gssapi_client_identity(Gssctxt *, const char *);
 
 /* In the server */
-typedef int ssh_gssapi_check_fn(Gssctxt **, gss_OID, const char *);
-char *ssh_gssapi_client_mechanisms(const char *host);
-char *ssh_gssapi_kex_mechs(gss_OID_set, ssh_gssapi_check_fn *, const char *);
+typedef int ssh_gssapi_check_fn(Gssctxt **, gss_OID, const char *, 
+    const char *);
+char *ssh_gssapi_client_mechanisms(const char *, const char *);
+char *ssh_gssapi_kex_mechs(gss_OID_set, ssh_gssapi_check_fn *, const char *,
+    const char *);
 gss_OID ssh_gssapi_id_kex(Gssctxt *, char *, int);
-int ssh_gssapi_server_check_mech(Gssctxt **,gss_OID, const char *);
+int ssh_gssapi_server_check_mech(Gssctxt **,gss_OID, const char *, 
+    const char *);
 OM_uint32 ssh_gssapi_server_ctx(Gssctxt **, gss_OID);
 int ssh_gssapi_userok(char *name);
 OM_uint32 ssh_gssapi_checkmic(Gssctxt *, gss_buffer_t, gss_buffer_t);
