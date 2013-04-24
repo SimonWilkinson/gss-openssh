@@ -101,6 +101,7 @@ initialize_server_options(ServerOptions *options)
 	options->gss_cleanup_creds = -1;
 	options->gss_strict_acceptor = -1;
 	options->gss_store_rekey = -1;
+	options->gss_req_deleg_creds_for = NULL;
 	options->password_authentication = -1;
 	options->kbd_interactive_authentication = -1;
 	options->challenge_response_authentication = -1;
@@ -332,7 +333,7 @@ typedef enum {
 	sHostbasedUsesNameFromPacketOnly, sClientAliveInterval,
 	sClientAliveCountMax, sAuthorizedKeysFile, sAuthorizedKeysFile2,
 	sGssAuthentication, sGssCleanupCreds, sGssStrictAcceptor,
-	sGssKeyEx, sGssStoreRekey,
+	sGssKeyEx, sGssStoreRekey, sGssReqDelCredsFor,
 	sAcceptEnv, sPermitTunnel,
 	sMatch, sPermitOpen, sForceCommand, sChrootDirectory,
 	sUsePrivilegeSeparation, sAllowAgentForwarding,
@@ -401,6 +402,7 @@ static struct {
 	{ "gssapistrictacceptorcheck", sGssStrictAcceptor, SSHCFG_GLOBAL },
 	{ "gssapikeyexchange", sGssKeyEx, SSHCFG_GLOBAL },
 	{ "gssapistorecredentialsonrekey", sGssStoreRekey, SSHCFG_GLOBAL },
+	{ "gssapirequiredelegatedcredentialsfor", sGssReqDelCredsFor, SSHCFG_GLOBAL },
 #else
 	{ "gssapiauthentication", sUnsupported, SSHCFG_ALL },
 	{ "gssapicleanupcredentials", sUnsupported, SSHCFG_GLOBAL },
@@ -408,6 +410,7 @@ static struct {
 	{ "gssapistrictacceptorcheck", sUnsupported, SSHCFG_GLOBAL },
 	{ "gssapikeyexchange", sUnsupported, SSHCFG_GLOBAL },
 	{ "gssapistorecredentialsonrekey", sUnsupported, SSHCFG_GLOBAL },
+	{ "gssapirequiredelegatedcredentialsfor", sUnsupported, SSHCFG_GLOBAL },
 #endif
 	{ "gssusesessionccache", sUnsupported, SSHCFG_GLOBAL },
 	{ "gssapiusesessioncredcache", sUnsupported, SSHCFG_GLOBAL },
@@ -980,6 +983,10 @@ process_server_config_line(ServerOptions *options, char *line,
 	case sGssStoreRekey:
 		intptr = &options->gss_store_rekey;
 		goto parse_flag;
+
+	case sGssReqDelCredsFor:
+	        options->gss_req_deleg_creds_for = strdup(arg = strdelim(&cp));
+		break;
 
 	case sPasswordAuthentication:
 		intptr = &options->password_authentication;
