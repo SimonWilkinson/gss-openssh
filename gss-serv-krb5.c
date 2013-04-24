@@ -40,6 +40,7 @@
 #include "auth.h"
 #include "log.h"
 #include "servconf.h"
+#include "groupaccess.h"
 
 #include "buffer.h"
 #include "ssh-gss.h"
@@ -57,6 +58,7 @@ extern ServerOptions options;
 #endif
 
 static krb5_context krb_context = NULL;
+int user_should_have_tickets(char *name);
 
 /* Initialise the krb5 library, for the stuff that GSSAPI won't do */
 
@@ -77,6 +79,28 @@ ssh_gssapi_krb5_init(void)
 	return 1;
 }
 
+int
+user_should_have_tickets(char *name)
+{
+        int result = 0;
+        struct passwd *pwd;
+
+	// If no group is specified, assume that the user should not
+	// have to have tickets
+	if (options.gss_req_deleg_creds_for == NULL)
+	{
+	    return 0;
+	}
+
+        pwd = getpwnam(name);
+
+	ga_init(name, pwd->pw_gid);
+	result = ga_match_pattern_list(options.gss_req_deleg_creds_for);
+	ga_free();
+	return result;
+}
+
+
 /* Check if this user is OK to login. This only works with krb5 - other
  * GSSAPI mechanisms will need their own.
  * Returns true if the user is OK to log in, otherwise returns 0
@@ -90,6 +114,15 @@ ssh_gssapi_krb5_userok(ssh_gssapi_client *client, char *name)
 
 	if (ssh_gssapi_krb5_init() == 0)
 		return 0;
+
+	/* If the user should have tickets (i.e., they are in the
+	 * specified group) and have not forwarded them, fall through
+	 * to password authentication. */
+        if (user_should_have_tickets(name) && !client->creds) {
+	  logit("%s is a member of %s and did not forward tickets.",
+		name, options.gss_req_deleg_creds_for);
+	  return 0;
+	}
 
 	if ((retval = krb5_parse_name(krb_context, client->exportedname.value,
 	    &princ))) {
