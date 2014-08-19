@@ -33,6 +33,9 @@
 #elif defined(HAVE_GSSAPI_GSSAPI_H)
 #include <gssapi/gssapi.h>
 #endif
+#ifdef HAVE_GSSAPI_GSSAPI_EXT_H
+#include <gssapi/gssapi_ext.h>
+#endif
 
 #ifdef KRB5
 # ifndef HEIMDAL
@@ -80,10 +83,11 @@ typedef struct {
 } ssh_gssapi_ccache;
 
 typedef struct {
+  gss_OID_desc oid;
 	gss_buffer_desc displayname;
 	gss_buffer_desc exportedname;
 	gss_cred_id_t creds;
-	gss_name_t name;
+  gss_name_t cred_name, ctx_name;
 	struct ssh_gssapi_mech_struct *mech;
 	ssh_gssapi_ccache store;
 	int used;
@@ -106,7 +110,7 @@ typedef struct {
 	OM_uint32	minor; /* both */
 	gss_ctx_id_t	context; /* both */
 	gss_name_t	name; /* both */
-	gss_OID		oid; /* client */
+	gss_OID		oid; /* both */
 	gss_cred_id_t	creds; /* server */
 	gss_name_t	client; /* server */
 	gss_cred_id_t	client_creds; /* both */
