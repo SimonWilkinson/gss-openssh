@@ -54,15 +54,70 @@
 extern ServerOptions options;
 
 static ssh_gssapi_client gssapi_client =
-    { GSS_C_EMPTY_BUFFER, GSS_C_EMPTY_BUFFER,
-    GSS_C_NO_CREDENTIAL, GSS_C_NO_NAME,  NULL, {NULL, NULL, NULL}, 0, 0};
+  { {0, NULL}, GSS_C_EMPTY_BUFFER, GSS_C_EMPTY_BUFFER,
+    GSS_C_NO_CREDENTIAL, GSS_C_NO_NAME, GSS_C_NO_NAME, NULL, {NULL, NULL, NULL}, 0, 0};
 
 ssh_gssapi_mech gssapi_null_mech =
     { NULL, NULL, {0, NULL}, NULL, NULL, NULL, NULL, NULL};
+/* Generic GSS-API support*/
+#ifdef HAVE_GSS_USEROK
+static int ssh_gssapi_generic_userok(
+				 ssh_gssapi_client *client, char *user) {
+  if (gss_userok(client->ctx_name, user)) {
+    debug("userok succeded for %s", user);
+    return 1;
+  } else {
+    debug("userok failed for %s", user);
+    return 0;
+  }
+}
+#endif
+
+static int
+ssh_gssapi_generic_localname(ssh_gssapi_client *client,
+			  char **localname) {
+  #ifdef HAVE_GSS_LOCALNAME
+  gss_buffer_desc lbuffer;
+  OM_uint32 major, minor;
+  *localname = NULL;
+  major = gss_localname(&minor, client->cred_name, NULL, &lbuffer);
+  if (GSS_ERROR(major))
+    return 0;
+  if (lbuffer.value == NULL)
+    return 0;
+  *localname = xmalloc(lbuffer.length+1);
+  if (*localname) {
+    memcpy(*localname, lbuffer.value, lbuffer.length);
+    *localname[lbuffer.length] = '\0';
+  }
+  gss_release_buffer(&minor, &lbuffer);
+  if (*localname)
+    return 1;
+  return 0;
+  #else
+  debug("No generic gss_localname");
+  return 0;
+  #endif
+      }
+
+#ifdef HAVE_GSS_USEROK
+static ssh_gssapi_mech ssh_gssapi_generic_mech = {
+  NULL, NULL,
+  {0, NULL},
+  NULL, /* dochild */
+  ssh_gssapi_generic_userok,
+  ssh_gssapi_generic_localname,
+  NULL,
+  NULL};
+static const ssh_gssapi_mech *ssh_gssapi_generic_mech_ptr = &ssh_gssapi_generic_mech;
+#else /*HAVE_GSS_USEROK*/
+static const ssh_gssapi_mech ssh_gssapi_generic_mech_ptr = NULL;
+#endif
 
 #ifdef KRB5
 extern ssh_gssapi_mech gssapi_kerberos_mech;
 #endif
+
 
 ssh_gssapi_mech* supported_mechs[]= {
 #ifdef KRB5
@@ -156,6 +211,24 @@ ssh_gssapi_supported_oids(gss_OID_set *oidset)
 	OM_uint32 min_status;
 	int present;
 	gss_OID_set supported;
+	/* If we have a generic mechanism all OIDs supported */
+	if (ssh_gssapi_generic_mech_ptr) {
+	  gss_OID_desc except_oids[3];
+	  gss_OID_set_desc except_attrs;
+	  except_oids[0] = *GSS_C_MA_MECH_NEGO;
+	  except_oids[1] = *GSS_C_MA_NOT_MECH;
+	  except_oids[2] = *GSS_C_MA_DEPRECATED;
+
+	  except_attrs.count = sizeof(except_oids)/sizeof(except_oids[0]);
+	  except_attrs.elements = except_oids;
+
+	  if (!GSS_ERROR(gss_indicate_mechs_by_attrs(&min_status,
+						     GSS_C_NO_OID_SET,
+						     &except_attrs,
+						     GSS_C_NO_OID_SET,
+						     oidset)))
+	    return;
+	}
 
 	gss_create_empty_oid_set(&min_status, oidset);
 
@@ -289,8 +362,8 @@ ssh_gssapi_getclient(Gssctxt *ctx, ssh_gssapi_client *client)
 	gss_buffer_desc ename = GSS_C_EMPTY_BUFFER;
 
 	if (options.gss_store_rekey && client->used && ctx->client_creds) {
-		if (client->mech->oid.length != ctx->oid->length ||
-		    (memcmp(client->mech->oid.elements,
+		if (client->oid.length != ctx->oid->length ||
+		    (memcmp(client->oid.elements,
 		     ctx->oid->elements, ctx->oid->length) !=0)) {
 			debug("Rekeyed credentials have different mechanism");
 			return GSS_S_COMPLETE;
@@ -303,7 +376,7 @@ ssh_gssapi_getclient(Gssctxt *ctx, ssh_gssapi_client *client)
 			return (ctx->major);
 		}
 
-		ctx->major = gss_compare_name(&ctx->minor, client->name, 
+		ctx->major = gss_compare_name(&ctx->minor, client->cred_name, 
 		    new_name, &equal);
 
 		if (GSS_ERROR(ctx->major)) {
@@ -318,9 +391,9 @@ ssh_gssapi_getclient(Gssctxt *ctx, ssh_gssapi_client *client)
 
 		debug("Marking rekeyed credentials for export");
 
-		gss_release_name(&ctx->minor, &client->name);
+		gss_release_name(&ctx->minor, &client->cred_name);
 		gss_release_cred(&ctx->minor, &client->creds);
-		client->name = new_name;
+		client->cred_name = new_name;
 		client->creds = ctx->client_creds;
         	ctx->client_creds = GSS_C_NO_CREDENTIAL;
 		client->updated = 1;
@@ -337,12 +410,17 @@ ssh_gssapi_getclient(Gssctxt *ctx, ssh_gssapi_client *client)
 		i++;
 	}
 
-	if (client->mech == NULL)
-		return GSS_S_FAILURE;
+	if (client->oid.elements == NULL)
+	  client->oid = *ctx->oid;
+	if (client->mech == NULL) {
+	  if (ssh_gssapi_generic_mech_ptr)
+	    client->mech = (ssh_gssapi_mech *) ssh_gssapi_generic_mech_ptr;
+	  else return GSS_S_FAILURE;
+	}
 
 	if (ctx->client_creds &&
 	    (ctx->major = gss_inquire_cred_by_mech(&ctx->minor,
-	     ctx->client_creds, ctx->oid, &client->name, NULL, NULL, NULL))) {
+	     ctx->client_creds, ctx->oid, &client->cred_name, NULL, NULL, NULL))) {
 		ssh_gssapi_error(ctx);
 		return (ctx->major);
 	}
@@ -359,11 +437,16 @@ ssh_gssapi_getclient(Gssctxt *ctx, ssh_gssapi_client *client)
 		return (ctx->major);
 	}
 
-	if ((ctx->major = ssh_gssapi_parse_ename(ctx,&ename,
+	if ((client->mech->oid.elements != NULL) &&
+	    (ctx->major = ssh_gssapi_parse_ename(ctx,&ename,
 	    &client->exportedname))) {
 		return (ctx->major);
 	}
 
+	if ((ctx->major = gss_duplicate_name(&ctx->minor, ctx->client,
+					     &client->ctx_name)))
+	  return ctx->major;
+	    
 	gss_release_buffer(&ctx->minor, &ename);
 
 	/* We can't copy this structure, so we just move the pointer to it */
@@ -417,11 +500,6 @@ ssh_gssapi_userok(char *user, struct passwd *pw)
 {
 	OM_uint32 lmin;
 
-	if (gssapi_client.exportedname.length == 0 ||
-	    gssapi_client.exportedname.value == NULL) {
-		debug("No suitable client data");
-		return 0;
-	}
 	if (gssapi_client.mech && gssapi_client.mech->userok)
 		if ((*gssapi_client.mech->userok)(&gssapi_client, user)) {
 			gssapi_client.used = 1;
@@ -432,6 +510,7 @@ ssh_gssapi_userok(char *user, struct passwd *pw)
 			gss_release_buffer(&lmin, &gssapi_client.displayname);
 			gss_release_buffer(&lmin, &gssapi_client.exportedname);
 			gss_release_cred(&lmin, &gssapi_client.creds);
+			gss_release_name(&lmin, &gssapi_client.ctx_name);
 			memset(&gssapi_client, 0, sizeof(ssh_gssapi_client));
 			return 0;
 		}
